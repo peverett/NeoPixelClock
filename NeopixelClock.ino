@@ -37,7 +37,6 @@
 #include "SSD1306Ascii.h"
 #include "SSD1306AsciiWire.h"
 
-
 /*! 
  * @brief I2C Addess for the SDD1306 OLED display.
  *
@@ -118,6 +117,82 @@ static void next_color( void ) {
     }
 }
 
+/*!
+ * @brief OLED displays nothing - is blank!
+ *   
+ * @returns void.
+ */
+static void oled_off(DateTime now, DateTime then, bool init=false) {
+  if (init) oled.clear();
+}
+
+/*!
+ * @brief OLED displays seconds in 8-segment display font!
+ *  
+ * @param now DateTime just read from RTC. 
+ * @param then Previous DateTime before current reading.
+ * @param init True if initialising this display mode.
+ * 
+ * @returns void.
+ */
+static void oled_seconds(DateTime now, DateTime then, bool init=false) {
+  if (init) {
+    // Use the lcdnums font.
+    oled.setFont(lcdnums14x24);
+    oled.clear();     
+  }
+  if (init || (now.second() != then.second())) {
+    oled.setCursor(40, 20);
+    if (now.second() < 10) oled.print("0");
+    oled.print(now.second());
+  }  
+}
+
+const char week_days[][11] = {
+  "   Sunday",
+  "   Monday",
+  "  Tuesday",
+  "Wednesday",
+  " Thursday",
+  "   Friday",
+  " Saturday"
+};
+
+/*!
+ * @brief OLED Day of week, year/month/day
+ *  
+ * @param now DateTime just read from RTC. 
+ * @param then Previous DateTime before current reading.
+ * @param init True if initialising this display mode.
+ * 
+ * @returns void.
+ */
+static void oled_date(DateTime now, DateTime then, bool init=false) {
+  if (init) {
+    oled.setFont(Arial14); 
+  }
+  if (init || (now.day() != then.day())) {
+    oled.clear();       // Draw fresh every day.
+    oled.println(week_days[now.dayOfTheWeek()]);
+    oled.print(now.year());
+    oled.print("/");
+    if (now.month() < 10) oled.print("0");
+    oled.print(now.month());
+    oled.print("/");
+    if (now.day() < 10) oled.print("0");
+    oled.print(now.day());
+  }  
+}
+
+DISP_FUNC_T oled_func[] = { oled_off, oled_seconds, oled_date };
+const int oled_mode_max = (int)sizeof(oled_func)/sizeof(DISP_FUNC_T);
+int oled_mode;
+char oled_mode_names[][11] = {
+  "Off       ",
+  "Seconds   ",
+  "Date      "
+ };
+
 // ArcTime
 static void ArcTime(DateTime now, DateTime then, bool init=false) {
   int pixel;
@@ -152,7 +227,6 @@ static void ArcTime(DateTime now, DateTime then, bool init=false) {
     ring24.show();
   }
 }
-
 
 static void RingTime(DateTime now, DateTime then, bool init=false) {
   if (init) clear_rings();
@@ -198,7 +272,6 @@ static void RingTime(DateTime now, DateTime then, bool init=false) {
     
 }
 
-
 static void ShowTime(DateTime now, DateTime then, bool init=false) {
 
   int hr = (now.hour() > 12) ? now.hour()-12 : now.hour();
@@ -218,10 +291,6 @@ static void ShowTime(DateTime now, DateTime then, bool init=false) {
     ring60.setPixelColor( now.second(), 0, 0, 30 );
   
     ring60.show();
-
-//    oled.setCursor(40, 20);
-//    if (now.second() < 10) oled.print("0");
-//    oled.print(now.second());  
   }
 
   if (init || (now.minute() != then.minute() ) ) {
@@ -286,28 +355,19 @@ bool configure_display() {
   }
 }
 
-int oled_disp_mode;
-char oled_mode_names[][11] = {
-  "Off       ",
-  "Date      ",
-  "Seconds   "
-};
-#define oled_mode_max 3
-
 /*!
  * @brief Configure the OLED display mode
  * 
  * OLED display options
  * - Display off
- * - Display date
  * - Display seconds
+ * - Display date
  * 
  * @returns On blue button press, returns true if held longer than 1-second
  *           otherwise false.
  */
 bool configure_oled() {
   bool red_button_press;
-  int row;
 
   oled.setFont(Arial14); 
   oled.clear();
@@ -315,10 +375,10 @@ bool configure_oled() {
 
   while(true) {
     red_button_press = false;
+    
     oled.setCursor(0, oled.fontRows());
-    oled.print(oled_mode_names[oled_disp_mode]);
+    oled.print(oled_mode_names[oled_mode]);
     oled.clearToEOL();
-    //disp_func[disp_mode](now, then, true);
 
     while(!red_button_press) {
       if (digitalRead(BLU_BTTN_PIN) == LOW) {
@@ -326,7 +386,7 @@ bool configure_oled() {
       }
       else if (digitalRead(RED_BTTN_PIN) == LOW) {
         red_button_press = long_button_press(RED_BTTN_PIN, 10);
-        oled_disp_mode = (oled_disp_mode + 1) % oled_mode_max;
+        oled_mode = (oled_mode + 1) % oled_mode_max;
       }
       now = rtc.now();
       disp_func[disp_mode](now, then, false);
@@ -363,7 +423,7 @@ void setup() {
   PRINTLN("Setup started.");
 
   disp_mode = 0;
-  oled_disp_mode = 0;
+  oled_mode = 0;
 
   // Intialise the Real Time Clock.
   if (!rtc.begin()) {
@@ -379,14 +439,12 @@ void setup() {
   ring24.begin();
 
   oled.begin(&Adafruit128x64, I2C_ADDRESS);
-  //oled.set400kHz();
-  oled.set2X();  
-  oled.setFont(lcdnums14x24);
-  //oled.setFont(fixednums15x31);
+  oled.set2X();     // Every font is double sized.
   oled.clear();
 
   now = then = rtc.now();
   disp_func[disp_mode](now, then, true);
+  oled_func[oled_mode](now, then, true);
 
   pinMode(RED_BTTN_PIN, INPUT_PULLUP);
   pinMode(BLU_BTTN_PIN, INPUT_PULLUP);
@@ -398,10 +456,11 @@ void loop() {
 
     if (digitalRead(BLU_BTTN_PIN) == LOW)  {
       configure();
-      oled.clear();
+      oled_func[oled_mode](now, then, true);
     }
         
     now = rtc.now();
     disp_func[disp_mode](now, then, false);
+    oled_func[oled_mode](now, then, false);
     then = now;    
 }
