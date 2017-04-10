@@ -23,6 +23,7 @@
 #define PRINTLN(X)
 #endif
 
+#include <Arduino.h>
 #include <Wire.h>
 #include "RTClib.h"
 #include "Adafruit_NeoPixel.h"
@@ -78,6 +79,23 @@ static bool long_button_press(int button, int time_ms) {
   
   while(digitalRead(button) == LOW);
   return (time_ms > (millis() - start)) ? false : true;  
+}
+
+/*!
+ * @brief Returns true if a button is held down for up to the specified time.
+ * 
+ * The fastest button quick press is probably about 200 to 300 ms. This can be
+ * used to return true constantly while the button is held down.
+ * 
+ * @param[in] button Digital button pin number.
+ * @param[in] time_ms Time period in miliseconds that the button should be held for.
+ * 
+ * @returns None.
+ */
+static void short_button_press(int button, int time_ms) {
+  long unsigned start = millis();
+  
+  while(digitalRead(button) == LOW && (time_ms > millis() - start));
 }
 
 /*!
@@ -231,7 +249,9 @@ static void ArcTime(DateTime now, DateTime then, bool init=false) {
 static void RingTime(DateTime now, DateTime then, bool init=false) {
   if (init) clear_rings();
   
-  if (init | (now.second() != then.second()) ) {
+  if ( init || 
+      (now.second() != then.second()) || 
+      (now.minute() != then.minute()) ) {
     int red, green, blue;
 
     for (int idx=0; idx<RING60_MAX; idx++) {
@@ -279,7 +299,9 @@ static void ShowTime(DateTime now, DateTime then, bool init=false) {
 
   if (init) clear_rings();
 
-  if (init || (now.second() != then.second() ) ) {
+  if ( init || 
+      (now.second() != then.second()) ||
+      (now.minute() != then.minute()) ) {
     for (int idx=0; idx<RING60_MAX; idx++) {
       if ( (idx % 5) == 0 )
         ring60.setPixelColor( idx, 10, 10, 10 );
@@ -293,7 +315,7 @@ static void ShowTime(DateTime now, DateTime then, bool init=false) {
     ring60.show();
   }
 
-  if (init || (now.minute() != then.minute() ) ) {
+  if (init || (now.hour() != then.hour() ) ) {
     for (int idx=0; idx<RING24_MAX; idx++) {
       ring24.setPixelColor( idx, 0, 0, 0 );
     }
@@ -397,6 +419,97 @@ bool configure_oled() {
 }
 
 /*!
+ * @brief Configure the time - hours.
+ * 
+ * @ returns On blue button press, returns true if held longer than 1-second,
+ *           otherwise false.
+ */
+bool configure_time_hour() {
+  bool red_button_press;
+  int row;
+  uint8_t hour;
+
+  oled.setFont(Arial14); 
+  oled.clear();
+  oled.println("Set Hours");
+
+  now = rtc.now();
+  disp_func[disp_mode](now, then, true);
+  while(true) {
+    red_button_press = false;
+    oled.setCursor(0, oled.fontRows());
+    oled.print(now.hour());
+    oled.clearToEOL();
+
+    while(!red_button_press) {
+      if (digitalRead(BLU_BTTN_PIN) == LOW) {
+        rtc.adjust(now);
+        return (long_button_press(BLU_BTTN_PIN, 1000)) ? true : false;
+      }
+      else if (digitalRead(RED_BTTN_PIN) == LOW) {
+        red_button_press = long_button_press(RED_BTTN_PIN, 10);
+        hour = (now.hour() + 1) % 24;
+        then = now;
+        now = DateTime(
+            now.year(), 
+            now.month(), 
+            now.day(), 
+            hour, 
+            now.minute(), 
+            0
+          );
+      }
+      disp_func[disp_mode](now, then, false);
+      delay(100);    
+    }
+  }
+}
+
+/*!
+ * @brief Configure the time - minutes.
+ * 
+ * @ returns On blue button press, returns true if held longer than 1-second,
+ *           otherwise false.
+ */
+bool configure_time_minute() {
+  bool red_button_press;
+  int row;
+  uint8_t minute;
+
+  oled.setFont(Arial14); 
+  oled.clear();
+  oled.println("Set Minute");
+
+  now = rtc.now();
+  disp_func[disp_mode](now, then, true);
+  while(true) {
+    oled.setCursor(0, oled.fontRows());
+    oled.print(now.minute());
+    
+    oled.clearToEOL();
+      if (digitalRead(BLU_BTTN_PIN) == LOW) {
+        rtc.adjust(now);
+        return (long_button_press(BLU_BTTN_PIN, 1000)) ? true : false;
+      }
+      else if (digitalRead(RED_BTTN_PIN) == LOW) {
+        short_button_press(RED_BTTN_PIN, 400);
+        minute = (now.minute() + 1) % 60;
+        then = now;
+        now = DateTime(
+            now.year(), 
+            now.month(), 
+            now.day(), 
+            now.hour(), 
+            minute, 
+            0
+          );
+      }
+      disp_func[disp_mode](now, then, false);
+      delay(100);    
+  }
+}
+
+/*!
  * @brief Configure the the aspects of the Neopixelclock
  * 
  * Configures the following aspects in the following order
@@ -415,6 +528,8 @@ void configure() {
 
   if (configure_display()) return;
   if (configure_oled()) return;
+  if (configure_time_hour()) return;
+  if (configure_time_minute()) return;
 }
 
 
