@@ -232,11 +232,12 @@ static void ArcTime(DateTime now, DateTime then, bool init=false) {
   }
 
   if (init || ( now.hour() != then.hour() ) ) {
-    if (now.hour() == 0) {
-      for (int idx=0; idx<RING24_MAX; idx) ring24.setPixelColor(idx, 0, 0, 0);
+    if (now.hour() == 0 || now.hour() == 12) {
+      for (int idx=0; idx<RING24_MAX; idx++) ring24.setPixelColor(idx, 0, 0, 0);
+      ring24.setPixelColor(0, clr[0], clr[1], clr[2]);
     }
     else {
-      pixel = ( (now.hour() > 12) ? now.hour()-12 : now.hour() ) * 2;
+      pixel = ( (now.hour() >= 12) ? now.hour()-12 : now.hour() ) * 2;
       for (int idx=0; idx<=pixel; idx++) {
         ring24.setPixelColor( idx, clr[0], clr[1], clr[2]);
         next_color();
@@ -271,21 +272,36 @@ static void RingTime(DateTime now, DateTime then, bool init=false) {
 
   if (init | (now.hour() != then.hour()) ) {
     int red, blue;
-    int hr = ( (now.hour() > 12) ? now.hour() - 12 : now.hour() ) * 2;
-
-    for (int idx=0; idx<RING24_MAX; idx++) {
-      if (now.hour() < 12) {
-        red = 30;
-        blue = 0;
-      } 
-      else {
-        red = 0;
-        blue = 30;
-      }
-      if (idx < hr)
+    int hr = ( (now.hour() >= 12) ? now.hour() - 12 : now.hour() ) * 2;
+    
+    if (now.hour() < 12) {
+      red = 30;
+      blue = 0;
+    } 
+    else {
+      red = 0;
+      blue = 30;
+    }
+    
+    /* At mid-night no hours are shown. */
+    if (now.hour() == 0) {
+      for (int idx=0; idx<=RING24_MAX; idx++) {
+        ring24.setPixelColor(idx, 0, 0, 0); 
+      }     
+    }
+    /* At mid-day the full ring is shown in blue. */
+    else if (now.hour() == 12) {
+      for (int idx=0; idx<=RING24_MAX; idx++) {
         ring24.setPixelColor(idx, red, 0, blue);
-      else
-        ring24.setPixelColor(idx, 0, 0, 0);
+      }
+    }
+    else {
+      for (int idx=0; idx<RING24_MAX; idx++) {
+        if (idx <= hr)
+          ring24.setPixelColor(idx, red, 0, blue);
+        else
+          ring24.setPixelColor(idx, 0, 0, 0);
+      }
     }
     ring24.show();
   }
@@ -294,8 +310,8 @@ static void RingTime(DateTime now, DateTime then, bool init=false) {
 
 static void ShowTime(DateTime now, DateTime then, bool init=false) {
 
-  int hr = (now.hour() > 12) ? now.hour()-12 : now.hour();
-  int pix_hour = (hr * 5);
+  int hr;
+  int pix_hour;
 
   if (init) clear_rings();
 
@@ -320,7 +336,7 @@ static void ShowTime(DateTime now, DateTime then, bool init=false) {
       ring24.setPixelColor( idx, 0, 0, 0 );
     }
   
-    hr = (now.hour() > 12) ? now.hour()-12 : now.hour();
+    hr = (now.hour() >= 12) ? now.hour()-12 : now.hour();
     pix_hour = hr * 2;
     ring24.setPixelColor(pix_hour, 30, 0, 0);
     ring24.show();
@@ -449,7 +465,6 @@ bool configure_time_hour() {
       else if (digitalRead(RED_BTTN_PIN) == LOW) {
         red_button_press = long_button_press(RED_BTTN_PIN, 10);
         hour = (now.hour() + 1) % 24;
-        then = now;
         now = DateTime(
             now.year(), 
             now.month(), 
@@ -460,6 +475,7 @@ bool configure_time_hour() {
           );
       }
       disp_func[disp_mode](now, then, false);
+      then = now;
       delay(100);    
     }
   }
@@ -492,7 +508,7 @@ bool configure_time_minute() {
         return (long_button_press(BLU_BTTN_PIN, 1000)) ? true : false;
       }
       else if (digitalRead(RED_BTTN_PIN) == LOW) {
-        short_button_press(RED_BTTN_PIN, 400);
+        short_button_press(RED_BTTN_PIN, 200);
         minute = (now.minute() + 1) % 60;
         then = now;
         now = DateTime(
