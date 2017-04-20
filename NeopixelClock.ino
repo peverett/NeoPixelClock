@@ -102,42 +102,6 @@ static void short_button_press(int button, int time_ms) {
   while(digitalRead(button) == LOW && (time_ms > millis() - start));
 }
 
-/*!
- * @brief Set all the neopixels so that they are off.
- * 
- * @returns None.
- */
-static void clear_rings(void) {
-  for(int idx=0; idx<RING60_MAX; idx++) ring60.setPixelColor(idx, 0, 0, 0);
-  ring60.show();
-
-  for(int idx=0; idx<RING24_MAX; idx++) ring24.setPixelColor(idx, 0, 0, 0);
-  ring24.show();  
-}
-
-
-int clr[3]= { 20, 0, 0 };
-int sub_idx = 0;
-int add_idx = 1;
-
-/*!
- * @brief calculate the next pastel color in the sequence
- * 
- * The 3 element array 'clr' contains Red, Green and Blue colors in range 0..20 for each.
- * Only two colours are displayed at any given time. One is incremented and the other 
- * decremented so that a 20 step gradiant is required to change between one primary 
- * color and the next.
- */
-static void next_color( void ) {
-    if ( clr[add_idx] < 20) {
-      clr[add_idx]++;
-      clr[sub_idx]--;
-    }
-    else {
-      sub_idx = add_idx;
-      add_idx = (add_idx+1) % 3;
-    }
-}
 
 /*!
  * @brief OLED displays nothing - is blank!
@@ -263,7 +227,14 @@ public:
    * @param[in] tt Time then in DateTime format.
    */
    virtual void Update(const DateTime tn, const DateTime tt) {};
-      
+
+  /*!
+   * @brief Return the name of the display mode, 11-char string, null-terminated.
+   * 
+   * @returns Name of display mode.
+   */
+   virtual char* getName(void) { return "Base      "; };
+   
 protected:
   Adafruit_NeoPixel ring24;
   Adafruit_NeoPixel ring60;
@@ -347,6 +318,10 @@ public:
       ring60.show();
     }
   };
+
+  char* getName(void) {
+    return "RGB Arc   "; 
+    };
 };
 
 
@@ -448,6 +423,10 @@ public:
     ring60.show();
   };
 
+  char* getName(void) {
+    return "Pastel    "; 
+    };
+    
 private:
   uint32_t minute_clr;
   uint32_t hour_clr;
@@ -534,6 +513,10 @@ public:
 
     if (show60) ring60.show();
   };
+
+    char* getName(void) {
+      return "Analog    "; 
+    };
 };
 
 AnalogTimeDisplay analog_time(ring24, ring60);
@@ -543,13 +526,6 @@ PastelTimeDisplay pastel_time(ring24, ring60);
 BaseTimeDisplay *time_display[] = { &analog_time, &arc_time, &pastel_time };
 
 const int disp_mode_max = sizeof(time_display) / sizeof(BaseTimeDisplay*);
-
-char disp_mode_names[][11] = {
-  "Analog   ",
-  "RGB Arc  ",
-  "Pastel   "
-};
-
 
 /*!
  * @brief Configure the Neopixel display mode of the clock.
@@ -568,7 +544,7 @@ bool configure_display() {
   while(true) {
     red_button_press = false;
     oled.setCursor(0, oled.fontRows());
-    oled.print(disp_mode_names[disp_mode]);
+    oled.print(time_display[disp_mode]->getName());
     oled.clearToEOL();
 
     while(!red_button_press) {
@@ -650,6 +626,7 @@ bool configure_time_hour() {
     oled.setCursor(0, oled.fontRows());
     oled.print(now.hour());
     oled.clearToEOL();
+    time_display[disp_mode]->Display(now);
 
     while(!red_button_press) {
       if (digitalRead(BLU_BTTN_PIN) == LOW) {
@@ -694,6 +671,7 @@ bool configure_time_minute() {
   while(true) {
     oled.setCursor(0, oled.fontRows());
     oled.print(now.minute());
+    oled.clearToEOL();
     time_display[disp_mode]->Display(now);
 
     oled.clearToEOL();
@@ -715,7 +693,6 @@ bool configure_time_minute() {
           );
         time_display[disp_mode]->Display(now);
       }
-      // time_display[disp_mode]->Update(now, then);
       delay(100);    
   }
 }
