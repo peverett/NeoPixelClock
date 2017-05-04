@@ -60,6 +60,7 @@ Adafruit_NeoPixel ring24 = Adafruit_NeoPixel(RING24_MAX, RING24_PIN, NEO_GRB + N
 SSD1306AsciiWire oled;
 
 int disp_mode;
+int oled_mode;
 
 DateTime now;
 DateTime then;
@@ -103,82 +104,141 @@ static void short_button_press(int button, int time_ms) {
 }
 
 
-/*!
- * @brief OLED displays nothing - is blank!
- *   
- * @returns void.
- */
-static void oled_off(DateTime now, DateTime then, bool init=false) {
-  if (init) oled.clear();
-}
 
 /*!
- * @brief OLED displays seconds in 8-segment display font!
- *  
- * @param now DateTime just read from RTC. 
- * @param then Previous DateTime before current reading.
- * @param init True if initialising this display mode.
+ * @brief OLED display base class - same API as for the Neopixel Time display.
  * 
- * @returns void.
+ * Used to display time related data when NOT in configuration mode.
+ * 
+ * This base class doesn't display anything on the OLED - which is a mode that can 
+ * be selected. 
  */
-static void oled_seconds(DateTime now, DateTime then, bool init=false) {
-  if (init) {
-    // Use the lcdnums font.
-    oled.setFont(lcdnums14x24);
-    oled.clear();     
-  }
-  if (init || (now.second() != then.second())) {
-    oled.setCursor(40, 20);
-    if (now.second() < 10) oled.print("0");
-    oled.print(now.second());
-  }  
-}
+class NoOledDisplay{
+public:
+  NoOledDisplay(SSD1306AsciiWire *oled_display) : od(oled_display) {};
 
-const char week_days[][11] = {
-  "   Sunday",
-  "   Monday",
-  "  Tuesday",
-  "Wednesday",
-  " Thursday",
-  "   Friday",
-  " Saturday"
+  /*!
+   * @brief Display the current time/date  passed in 'tn', intialising the display
+   *    
+   * Intialises the display.
+   *  
+   * @param[in] tn Time now in DateTime format.
+   */
+  virtual void Display(const DateTime tn) 
+  {
+    od->clear(); /* No display */
+  };
+
+  /*!
+   * @brief Update the display for the difference between 'tn' - time now - and
+   * 'tt' - time then. 
+   * 
+   * @param[in] tn Time now in DateTime format.
+   * @param[in] tt Time then in DateTime format.
+   */
+   virtual void Update(const DateTime tn, const DateTime tt) {};
+
+  /*!
+   * @brief Return the name of the display mode, 11-char string, null-terminated.
+   * 
+   * @returns Name of display mode.
+   */
+   virtual char* getName(void) { return "Off       "; };
+
+protected:
+  SSD1306AsciiWire *od;
 };
 
 /*!
- * @brief OLED Day of week, year/month/day
- *  
- * @param now DateTime just read from RTC. 
- * @param then Previous DateTime before current reading.
- * @param init True if initialising this display mode.
- * 
- * @returns void.
+ * @brief Display only the seconds in big 8-segment font size. 
  */
-static void oled_date(DateTime now, DateTime then, bool init=false) {
-  if (init) {
-    oled.setFont(Arial14); 
-  }
-  if (init || (now.day() != then.day())) {
-    oled.clear();       // Draw fresh every day.
-    oled.println(week_days[now.dayOfTheWeek()]);
-    oled.print(now.year());
-    oled.print("/");
-    if (now.month() < 10) oled.print("0");
-    oled.print(now.month());
-    oled.print("/");
-    if (now.day() < 10) oled.print("0");
-    oled.print(now.day());
-  }  
-}
+class SecondsOledDisplay: public NoOledDisplay {
+private:
+  void display_seconds(const DateTime tn)
+  {
+    PRINTLN("display_seconds");  
+    od->setCursor(40, 20);
+    if (tn.second() < 10) od->print("0");
+      od->print(tn.second());    
+  };
 
-DISP_FUNC_T oled_func[] = { oled_off, oled_seconds, oled_date };
-const int oled_mode_max = (int)sizeof(oled_func)/sizeof(DISP_FUNC_T);
-int oled_mode;
-char oled_mode_names[][11] = {
-  "Off       ",
-  "Seconds   ",
-  "Date      "
- };
+public:
+  SecondsOledDisplay(SSD1306AsciiWire *oled_display) : 
+    NoOledDisplay(oled_display) 
+    {};
 
+  void Display(const DateTime tn) 
+  {
+    PRINTLN("SECONDS DISPLAY");
+    od->setFont(lcdnums14x24);
+    //od.clear();
+    display_seconds(tn);     
+  };
+
+  void Update(const DateTime tn, const DateTime tt)
+  {
+    if (tn.second() != tt.second()) {
+      display_seconds(tn);
+    }  
+  };
+
+  char* getName(void) { return "Seconds   "; };
+};
+
+/*!
+ * @brief Display only the seconds in big 8-segment font size. 
+ */
+class DateOledDisplay: public NoOledDisplay {
+private:
+
+  const char week_days[7][11] = {
+    "   Sunday",
+    "   Monday",
+    "  Tuesday",
+    "Wednesday",
+    " Thursday",
+    "   Friday",
+    " Saturday"
+  };
+
+  void display_date(const DateTime tn) {
+    od->println(week_days[tn.dayOfTheWeek()]);
+    od->print(tn.year());
+    od->print("/");
+    if (tn.month() < 10) od->print("0");
+    od->print(tn.month());
+    od->print("/");
+    if (tn.day() < 10) od->print("0");
+    od->print(tn.day());
+  };
+  
+public:
+  DateOledDisplay(SSD1306AsciiWire *oled_display) 
+    : NoOledDisplay(oled_display) 
+    {};
+
+  void Display(const DateTime tn) {
+    od->setFont(Arial14); 
+    od->clear(); 
+    display_date(tn); 
+  };
+
+  void Update(const DateTime tn, const DateTime tt) {
+    if (tn.day() != tt.day()) {
+      display_date(tn);
+    }  
+  };
+
+  char* getName(void) { return "Date      "; };
+};
+
+
+NoOledDisplay       oled_off(&oled);
+SecondsOledDisplay  oled_seconds(&oled);
+DateOledDisplay     oled_date(&oled);
+
+NoOledDisplay *oled_display[] = { &oled_off, &oled_seconds, &oled_date };
+const int oled_mode_max = (int)sizeof(oled_display) / sizeof(NoOledDisplay*);
 
 /*!
  * @brief convert 24-hour clock time to 12-hour.
@@ -586,7 +646,7 @@ bool configure_oled() {
     red_button_press = false;
     
     oled.setCursor(0, oled.fontRows());
-    oled.print(oled_mode_names[oled_mode]);
+    oled.print(oled_display[oled_mode]->getName());
     oled.clearToEOL();
 
     while(!red_button_press) {
@@ -726,7 +786,12 @@ void setup() {
   PRINTLN("Setup started.");
 
   disp_mode = 0;
-  oled_mode = 0;
+  oled_mode = 1;
+
+  PRINT("OLED Mode Max: ");
+  PRINTLN(oled_mode_max);
+  PRINT("Display Mode Max: ");
+  PRINTLN(disp_mode_max);
 
   // Intialise the Real Time Clock.
   if (!rtc.begin()) {
@@ -743,11 +808,10 @@ void setup() {
 
   oled.begin(&Adafruit128x64, I2C_ADDRESS);
   oled.set2X();     // Every font is double sized.
-  oled.clear();
 
   now = then = rtc.now();
   time_display[disp_mode]->Display(now);
-  oled_func[oled_mode](now, then, true);
+  oled_display[oled_mode]->Display(now);
 
   pinMode(RED_BTTN_PIN, INPUT_PULLUP);
   pinMode(BLU_BTTN_PIN, INPUT_PULLUP);
@@ -759,11 +823,14 @@ void loop() {
 
     if (digitalRead(BLU_BTTN_PIN) == LOW)  {
       configure();
-      oled_func[oled_mode](now, then, true);
+      PRINT("Oled Mode: ");
+      PRINTLN(oled_mode);
+      oled.clear();
+      oled_display[oled_mode]->Display(now);
     }
         
     now = rtc.now();
     time_display[disp_mode]->Update(now, then);
-    oled_func[oled_mode](now, then, false);
+    oled_display[oled_mode]->Update(now, then);
     then = now;    
 }
