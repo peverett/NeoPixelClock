@@ -9,7 +9,7 @@
  * - Ring of 60 5050 Neopixels (Adafruit) - digital pin 12
  * - Ring of 24 5050 Neopixels (Adafruit) - digital pin 11
  * - SSD1306 OLED display 128 x 96 pixels - I2C
- * - Two buttons for input on digital pins 9 and 10
+ * - Two buttons for input on digital pins 9 (Blue) and 10 (Red)
  */
 
 #define DEBUG_PRINT
@@ -104,11 +104,13 @@ static void short_button_press(int button, int time_ms) {
 }
 
 
-
 /*!
  * @brief OLED display base class - same API as for the Neopixel Time display.
  * 
  * Used to display time related data when NOT in configuration mode.
+ * 
+ * The 'od' (for OLED Display) is passed by pointer. For some reason, pass by reference
+ * does not work for the SDD1306AsciiWire class but pass by pointer does.
  * 
  * This base class doesn't display anything on the OLED - which is a mode that can 
  * be selected. 
@@ -120,7 +122,7 @@ public:
   /*!
    * @brief Display the current time/date  passed in 'tn', intialising the display
    *    
-   * Intialises the display.
+   * Intialises the display. For some reason
    *  
    * @param[in] tn Time now in DateTime format.
    */
@@ -169,7 +171,6 @@ public:
 
   void Display(const DateTime tn) 
   {
-    PRINTLN("SECONDS DISPLAY");
     od->setFont(lcdnums14x24);
     //od.clear();
     display_seconds(tn);     
@@ -244,6 +245,8 @@ const int oled_mode_max = (int)sizeof(oled_display) / sizeof(NoOledDisplay*);
  * @brief convert 24-hour clock time to 12-hour.
  * 
  * @param[in] twenty_four Twenty four hour clock time, range 0..23.
+ * 
+ * @return The equivalent hour in 12 hour format, 12 = 0.
  */
 inline uint8_t TwentyFourToTwelve(uint8_t twenty_four) {
   return (twenty_four >= 12) ? twenty_four - 12 : twenty_four;
@@ -590,7 +593,7 @@ const int disp_mode_max = sizeof(time_display) / sizeof(BaseTimeDisplay*);
 /*!
  * @brief Configure the Neopixel display mode of the clock.
  * 
- * @ returns On blue button press, returns true if held longer than 1-second,
+ * @returns On blue button press, returns true if held longer than 1-second,
  *           otherwise false.
  */
 bool configure_display() {
@@ -668,7 +671,7 @@ bool configure_oled() {
 /*!
  * @brief Configure the time - hours.
  * 
- * @ returns On blue button press, returns true if held longer than 1-second,
+ * @returns On blue button press, returns true if held longer than 1-second,
  *           otherwise false.
  */
 bool configure_time_hour() {
@@ -758,13 +761,13 @@ bool configure_time_minute() {
 }
 
 /*!
- * @brief Configure the the aspects of the Neopixelclock
+ * @brief Configure the aspects of the Neopixelclock
  * 
  * Configures the following aspects in the following order
  * - Display mode 
  * - OLED display mode
- * - Date 
  * - Time
+ * - Date 
  * If the blue button is held for more than 1-second at any point the
  * whole configuration function is exited.
  * 
@@ -774,13 +777,28 @@ void configure() {
   // Wait for the Blue button to be released.
   while (digitalRead(BLU_BTTN_PIN) == LOW);
 
-  if (configure_display()) return;
-  if (configure_oled()) return;
-  if (configure_time_hour()) return;
-  if (configure_time_minute()) return;
+  /* This will execute the do-while loop once. If, during a configure function,
+   * there is a long Blue button press, then the function will return True and
+   * break out of the loop early.
+   */
+  do {
+    if (configure_display()) break;
+    if (configure_oled()) break;
+    if (configure_time_hour()) break;
+    if (configure_time_minute()) break;
+  } while(false);
+
+  oled.clear();
+  oled_display[oled_mode]->Display(now);
+
   then = now;
 }
 
+/*!
+ * @brief Setup the Neopixelclock application
+ * 
+ * @returns None.
+ */
 void setup() {
   PRINT_INIT( 9600 );
   PRINTLN("Setup started.");
@@ -818,19 +836,19 @@ void setup() {
   PRINTLN("Setup completed.");
 }
 
-
+/*!
+ * @brief Main loop function, which is called repeatedly.
+ * 
+ * @returns None.
+ */
 void loop() {
 
     if (digitalRead(BLU_BTTN_PIN) == LOW)  {
       configure();
-      PRINT("Oled Mode: ");
-      PRINTLN(oled_mode);
-      oled.clear();
-      oled_display[oled_mode]->Display(now);
     }
         
     now = rtc.now();
     time_display[disp_mode]->Update(now, then);
     oled_display[oled_mode]->Update(now, then);
     then = now;    
-}
+} 
