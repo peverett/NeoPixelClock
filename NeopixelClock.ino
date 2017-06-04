@@ -596,169 +596,155 @@ const int disp_mode_max = sizeof(time_display) / sizeof(BaseTimeDisplay*);
  * @returns On blue button press, returns true if held longer than 1-second,
  *           otherwise false.
  */
-bool configure_display() {
-  bool red_button_press;
-  int row;
+class config_display {
+protected:
+  virtual void legend(void) { 
+    oled.println("Set Display"); 
+    };
 
-  oled.setFont(Arial14); 
-  oled.clear();
-  oled.println("Set Display");
+  virtual void current_setting(void) {
+      oled.print(time_display[disp_mode]->getName());
+  };
 
-  while(true) {
-    red_button_press = false;
-    oled.setCursor(0, oled.fontRows());
-    oled.print(time_display[disp_mode]->getName());
-    oled.clearToEOL();
+  virtual void blue_button_action(void) {
+    // Action on Blue button press.
+  };
 
-    while(!red_button_press) {
-      if (digitalRead(BLU_BTTN_PIN) == LOW) {
-        return (long_button_press(BLU_BTTN_PIN, 1000)) ? true : false;
-      }
-      else if (digitalRead(RED_BTTN_PIN) == LOW) {
-        red_button_press = long_button_press(RED_BTTN_PIN, 10);
-        disp_mode = (disp_mode + 1) % disp_mode_max;
-        time_display[disp_mode]->Display(now);
-      }
-      now = rtc.now();
-      time_display[disp_mode]->Update(now, then);
-      then = now;
-      delay(100);    
-    }
-  }
-}
-
-/*!
- * @brief Configure the OLED display mode
- * 
- * OLED display options
- * - Display off
- * - Display seconds
- * - Display date
- * 
- * @returns On blue button press, returns true if held longer than 1-second
- *           otherwise false.
- */
-bool configure_oled() {
-  bool red_button_press;
-
-  oled.setFont(Arial14); 
-  oled.clear();
-  oled.println("Set OLED");
-
-  while(true) {
-    red_button_press = false;
-    
-    oled.setCursor(0, oled.fontRows());
-    oled.print(oled_display[oled_mode]->getName());
-    oled.clearToEOL();
-
-    while(!red_button_press) {
-      if (digitalRead(BLU_BTTN_PIN) == LOW) {
-        return (long_button_press(BLU_BTTN_PIN, 1000)) ? true : false;
-      }
-      else if (digitalRead(RED_BTTN_PIN) == LOW) {
-        red_button_press = long_button_press(RED_BTTN_PIN, 10);
-        oled_mode = (oled_mode + 1) % oled_mode_max;
-      }
-      now = rtc.now();
-      time_display[disp_mode]->Update(now, then);
-      then = now;
-      delay(100);    
-    }
-  }  
-}
-
-/*!
- * @brief Configure the time - hours.
- * 
- * @returns On blue button press, returns true if held longer than 1-second,
- *           otherwise false.
- */
-bool configure_time_hour() {
-  bool red_button_press;
-  int row;
-  uint8_t hour;
-
-  oled.setFont(Arial14); 
-  oled.clear();
-  oled.println("Set Hours");
-
-  now = rtc.now();
-  while(true) {
-    red_button_press = false;
-    oled.setCursor(0, oled.fontRows());
-    oled.print(now.hour());
-    oled.clearToEOL();
+  virtual void red_button_action(void) {
+    disp_mode = (disp_mode + 1) % disp_mode_max;
     time_display[disp_mode]->Display(now);
+  };
 
-    while(!red_button_press) {
-      if (digitalRead(BLU_BTTN_PIN) == LOW) {
-        rtc.adjust(now);
-        return (long_button_press(BLU_BTTN_PIN, 1000)) ? true : false;
-      }
-      else if (digitalRead(RED_BTTN_PIN) == LOW) {
-        red_button_press = long_button_press(RED_BTTN_PIN, 10);
-        hour = (now.hour() + 1) % 24;
-        now = DateTime(
-            now.year(), 
-            now.month(), 
-            now.day(), 
-            hour, 
-            now.minute(), 
-            0
-          );
-      }
-      time_display[disp_mode]->Update(now, then);
-      then = now;
-      delay(100);    
+  virtual void display_update(void) {
+    now = rtc.now();
+    time_display[disp_mode]->Update(now, then);
+    then = now;
+    delay(100);        
+  };
+  
+public:
+  bool configure() {
+    bool red_button_press;
+    int row;
+  
+    oled.setFont(Arial14); 
+    oled.clear();
+    this->legend();
+  
+    while(true) {
+      red_button_press = false;
+      oled.setCursor(0, oled.fontRows());
+      this->current_setting();
+      oled.clearToEOL();    
+  
+      while(!red_button_press) {
+        if (digitalRead(BLU_BTTN_PIN) == LOW) {
+          this->blue_button_action();
+          return (long_button_press(BLU_BTTN_PIN, 1000)) ? true : false;
+        }
+        else if (digitalRead(RED_BTTN_PIN) == LOW) {
+          red_button_press = long_button_press(RED_BTTN_PIN, 10);
+          this->red_button_action();
+        }
+        /* Continue to update the Neopixel time display. */
+        this->display_update();
+        }
     }
   }
-}
 
-/*!
- * @brief Configure the time - minutes.
- * 
- * @ returns On blue button press, returns true if held longer than 1-second,
- *           otherwise false.
- */
-bool configure_time_minute() {
-  bool red_button_press;
-  int row;
-  uint8_t minute;
+};
 
-  oled.setFont(Arial14); 
-  oled.clear();
-  oled.println("Set Minute");
 
-  now = rtc.now();
-  while(true) {
-    oled.setCursor(0, oled.fontRows());
-    oled.print(now.minute());
-    oled.clearToEOL();
+class config_oled : public config_display {
+protected:
+  virtual void legend(void) { 
+    oled.println("Set OLED"); 
+    };
+
+  virtual void current_setting(void) {
+      oled.print(oled_display[oled_mode]->getName());
+  };
+
+  virtual void blue_button_action(void) {
+    // Action on Blue button press.
+  };
+
+  virtual void red_button_action(void) {
+    oled_mode = (oled_mode + 1) % oled_mode_max;
+  };
+  
+};
+
+class config_hour : public config_display {
+protected:
+  virtual void legend(void) { 
+    oled.println("Set Hours"); 
+    };
+
+  virtual void current_setting(void) {
+      oled.print(now.hour());
+  };
+
+  virtual void blue_button_action(void) {
+    rtc.adjust(now);
+  };
+
+  virtual void red_button_action(void) {
+    uint8_t hour = (now.hour() + 1) % 24;
+    now = DateTime(
+      now.year(), 
+      now.month(), 
+      now.day(), 
+      hour, 
+      now.minute(), 
+      0
+      );
     time_display[disp_mode]->Display(now);
+  };
 
-    oled.clearToEOL();
-      if (digitalRead(BLU_BTTN_PIN) == LOW) {
-        rtc.adjust(now);
-        return (long_button_press(BLU_BTTN_PIN, 1000)) ? true : false;
-      }
-      else if (digitalRead(RED_BTTN_PIN) == LOW) {
-        short_button_press(RED_BTTN_PIN, 200);
-        minute = (now.minute() + 1) % 60;
-        then = now;
-        now = DateTime(
-            now.year(), 
-            now.month(), 
-            now.day(), 
-            now.hour(), 
-            minute, 
-            0
-          );
-        time_display[disp_mode]->Display(now);
-      }
-      delay(100);    
-  }
-}
+  virtual void display_update(void) {
+    time_display[disp_mode]->Update(now, then);
+    then = now;
+    delay(100);    
+  };
+  
+};
+
+class config_minute : public config_display {
+protected:
+  virtual void legend(void) { 
+    oled.println("Set Minute"); 
+    };
+
+  virtual void current_setting(void) {
+      oled.print(now.minute());
+  };
+
+  virtual void blue_button_action(void) {
+    rtc.adjust(now);
+  };
+
+  virtual void red_button_action(void) {
+    uint8_t minute = (now.minute() + 1) % 60;
+    now = DateTime(
+      now.year(), 
+      now.month(), 
+      now.day(), 
+      now.hour(), 
+      minute, 
+      0
+      );
+    time_display[disp_mode]->Display(now);
+  };
+
+  virtual void display_update(void) {
+    time_display[disp_mode]->Update(now, then);
+    then = now;
+    delay(100);    
+  };
+  
+};
+
 
 /*!
  * @brief Configure the aspects of the Neopixelclock
@@ -782,10 +768,10 @@ void configure() {
    * break out of the loop early.
    */
   do {
-    if (configure_display()) break;
-    if (configure_oled()) break;
-    if (configure_time_hour()) break;
-    if (configure_time_minute()) break;
+    if (config_display().configure()) break;
+    if (config_oled().configure()) break;
+    if (config_hour().configure()) break;
+    if (config_minute().configure()) break;
   } while(false);
 
   oled.clear();
