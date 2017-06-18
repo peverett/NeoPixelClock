@@ -196,14 +196,15 @@ private:
     "   Sunday",
     "   Monday",
     "  Tuesday",
-    "Wednesday",
+    "wednesday",
     " Thursday",
     "   Friday",
     " Saturday"
   };
 
   void display_date(const DateTime tn) {
-    od->println(week_days[tn.dayOfTheWeek()]);
+    this->display_day_of_week(tn);
+    od->println("");
     od->print(tn.year());
     od->print("/");
     if (tn.month() < 10) od->print("0");
@@ -218,8 +219,12 @@ public:
     : NoOledDisplay(oled_display) 
     {};
 
+  void display_day_of_week(const DateTime tn) {
+    od->print(week_days[tn.dayOfTheWeek()]);    
+  }
+
   void Display(const DateTime tn) {
-    od->setFont(Arial14); 
+    od->setFont(Verdana12); 
     od->clear(); 
     display_date(tn); 
   };
@@ -745,6 +750,40 @@ protected:
   
 };
 
+class config_day_of_month : public config_display {
+protected:
+  virtual void legend(void) { 
+    oled.println("Set week day"); 
+    };
+
+  virtual void current_setting(void) {
+      oled.print(now.minute());
+  };
+
+  virtual void blue_button_action(void) {
+    rtc.adjust(now);
+  };
+
+  virtual void red_button_action(void) {
+    uint8_t minute = (now.minute() + 1) % 60;
+    now = DateTime(
+      now.year(), 
+      now.month(), 
+      now.day(), 
+      now.hour(), 
+      minute, 
+      0
+      );
+    time_display[disp_mode]->Display(now);
+  };
+
+  virtual void display_update(void) {
+    time_display[disp_mode]->Update(now, then);
+    then = now;
+    delay(100);    
+  };
+  
+};
 
 /*!
  * @brief Configure the aspects of the Neopixelclock
